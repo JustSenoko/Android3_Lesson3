@@ -1,4 +1,10 @@
 <resources>
     <string name="app_name">Android3_Lesson3</string>
-    <string name="select_file">Select file</string>
+    <string name="select_file">Выберите изображение</string>
+    <string name="success">Завершено успешно</string>
+    <string name="error">Завершено с ошибками </string>
+    <string name="in_progress">Конвертация</string>
+    <string name="msg_in_progress">Выполняется…</string>
+    <string name="interrupted">Конвертация отменена</string>
+    <string name="cansel">Отмена</string>
 </resources>

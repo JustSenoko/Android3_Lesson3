@@ -6,44 +6,39 @@ import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
-import android.view.View;
 import android.widget.Button;
-import android.widget.ImageView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 
+import io.reactivex.Completable;
 import io.reactivex.Observable;
-import io.reactivex.ObservableEmitter;
-import io.reactivex.ObservableOnSubscribe;
-import io.reactivex.functions.Consumer;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.Disposable;
 import io.reactivex.schedulers.Schedulers;
-import io.reactivex.subjects.PublishSubject;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final int SELECT_PICTURE = 42;
-    PublishSubject<Uri> filenameSubject = null;
+    Completable filenameSubject;
+    Disposable disposable;
+    AlertDialog alert;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        filenameSubject = PublishSubject.create();
+
 
         final Button button = findViewById(R.id.button);
         Observable<String> buttonObservable = Observable.create(emitter -> button.setOnClickListener(view -> emitter.onNext("")));
         buttonObservable.subscribe((s) -> selectImageDialog());
-
-        filenameSubject.subscribeOn(Schedulers.io()).subscribe((filename) -> {
-            Bitmap bitmapSelectedImage = getImage(filename);
-            saveAsPNG(bitmapSelectedImage);});
     }
 
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
@@ -51,9 +46,37 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode != SELECT_PICTURE || resultCode != RESULT_OK) {
             return;
         }
+        filenameSubject = Completable.create(emitter -> {
+            Bitmap bitmapSelectedImage = getImage(intent.getData());
+            if (bitmapSelectedImage != null) {
+                saveAsPNG(bitmapSelectedImage);
+            }
+            emitter.onComplete();
+        }).subscribeOn(Schedulers.io())
+        .observeOn(AndroidSchedulers.mainThread());
 
-        filenameSubject.onNext(intent.getData());
-        filenameSubject.onComplete();
+        disposable = filenameSubject.subscribe(
+                ()-> {
+                    if(alert.isShowing()) alert.cancel();
+                    Toast.makeText(MainActivity.this, getResources().getString(R.string.success),Toast.LENGTH_LONG).show();
+                },
+                (e)->{
+                    if(alert.isShowing()) alert.cancel();
+                    Toast.makeText(MainActivity.this, getResources().getString(R.string.error) + e.getLocalizedMessage(),Toast.LENGTH_LONG).show();
+                }
+        );
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+        builder.setTitle(getResources().getString(R.string.in_progress))
+                .setMessage(getResources().getString(R.string.msg_in_progress))
+                .setCancelable(false)
+                .setNegativeButton(getResources().getString(R.string.cansel),(dialog, id)->{
+                    if(!disposable.isDisposed()) disposable.dispose();
+                    Toast.makeText(MainActivity.this, getResources().getString(R.string.interrupted),Toast.LENGTH_LONG).show();
+                    dialog.cancel();
+                });
+        alert = builder.create();
+        alert.show();
     }
 
     private void selectImageDialog() {
@@ -71,6 +94,12 @@ public class MainActivity extends AppCompatActivity {
             imageStream = getContentResolver().openInputStream(selectedImage);
         } catch (FileNotFoundException e) {
             e.printStackTrace();
+            return null;
+        }
+        try {
+            Thread.sleep(10000);
+        }
+        catch (InterruptedException e){
             return null;
         }
         return BitmapFactory.decodeStream(imageStream);
@@ -93,7 +122,7 @@ public class MainActivity extends AppCompatActivity {
                     fos.close();
                 }
             }
-        } catch (Exception e) {
+        } catch(Exception e) {
             e.printStackTrace();
         }
     }
