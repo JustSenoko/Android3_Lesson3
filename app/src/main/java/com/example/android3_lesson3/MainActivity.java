@@ -10,6 +10,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 
@@ -36,35 +37,13 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         filenameSubject = PublishSubject.create();
 
-        Consumer<String> consumer = new Consumer<String>() {
-            @Override
-            public void accept(String s) {
-                selectImageDialog();
-            }
-        };
-
-        Consumer<Uri> fileProcessor = new Consumer<Uri>() {
-            @Override
-            public void accept(Uri filename) {
-                Bitmap bitmapSelectedImage = getImage(filename);
-                savePNG(bitmapSelectedImage);
-            }
-        };
-
         final Button button = findViewById(R.id.button);
-        Observable<String> buttonObservable = Observable.create(new ObservableOnSubscribe<String>() {
-            @Override
-            public void subscribe(final ObservableEmitter<String> emitter) {
-                button.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View view) {
-                        emitter.onNext("");
-                    }
-                });
-            }
-        });
-        buttonObservable.subscribe(consumer);
-        filenameSubject.subscribeOn(Schedulers.io()).subscribe(fileProcessor);
+        Observable<String> buttonObservable = Observable.create(emitter -> button.setOnClickListener(view -> emitter.onNext("")));
+        buttonObservable.subscribe((s) -> selectImageDialog());
+
+        filenameSubject.subscribeOn(Schedulers.io()).subscribe((filename) -> {
+            Bitmap bitmapSelectedImage = getImage(filename);
+            saveAsPNG(bitmapSelectedImage);});
     }
 
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
@@ -86,7 +65,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private Bitmap getImage(Uri selectedImage) {
-//        Uri selectedImage = intent.getData();
         InputStream imageStream;
         try {
             assert selectedImage != null;
@@ -98,7 +76,7 @@ public class MainActivity extends AppCompatActivity {
         return BitmapFactory.decodeStream(imageStream);
     }
 
-    private void savePNG(Bitmap bitmapSelectedImage) {
+    private void saveAsPNG(Bitmap bitmapSelectedImage) {
         File file = new File(
                 getExternalFilesDir(Environment.DIRECTORY_PICTURES),
                 "savedBitmap.png"
@@ -110,17 +88,13 @@ public class MainActivity extends AppCompatActivity {
                 fos = new FileOutputStream(file);
                 bitmapSelectedImage.compress(Bitmap.CompressFormat.PNG, 100, fos);
             } finally {
-                if (fos != null) fos.close();
+                if (fos != null) {
+                    fos.flush();
+                    fos.close();
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
-        }
-        if (file.exists()){
-
-            Bitmap myBitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
-            ImageView myImage = (ImageView) findViewById(R.id.imageviewTest);
-            myImage.setImageBitmap(myBitmap);
-
         }
     }
 }
